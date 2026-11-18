@@ -138,15 +138,49 @@ and every button. That API is invisible to the agent.
 tools from it. The agent then reads and acts in ~1 second per call with structured data, using exactly the user's own permissions.
 
 ### What we built
-_In progress._ Pipeline: `underpass record` -> `analyze` -> `generate` -> `serve` / `call`.
+One command turns a website into tools for your agent:
+
+```bash
+underpass add coach.mastersunion.org
+```
+
+1. **Record** (`record`): a browser opens; you log in and use the site. Underpass captures every API request the front end
+   makes: reads, actions (POST/PUT/PATCH/DELETE with their bodies), GraphQL calls and classic form posts. Then it explores the
+   rest of the site on its own with your saved login (skipping logout/delete links).
+2. **Map** (`analyze`): groups calls into endpoint templates (`/term/{term_id}/attendance`), keeps real example values,
+   flattens response shapes, detects how the site authenticates (bearer token / cookies / custom headers, plus token expiry),
+   and **scans the site's own JavaScript for endpoints nobody clicked**. Passwords/OTPs are redacted; login/logout/telemetry
+   calls never become tools.
+3. **Generate** (`generate`): Claude designs the tool list: names, plain-English descriptions, which params an agent should
+   vary vs. fixed defaults, which response fields matter, and for every action, a read tool that verifies it worked.
+4. **Serve** (`serve`): a generic MCP server exposes the tools to Claude Code / Claude Desktop / Cursor. `add` registers it
+   automatically. `call` and `list` use the same engine from the terminal.
+
+**Safety model:** read tools run directly. Action tools never send anything without `confirm=true`: the first call returns an
+exact preview of the request so the agent can ask the user; after an approved action, Underpass calls the verify tool and
+returns proof. Everything runs locally; the login never leaves your machine; the agent only gets your own permissions.
+
+**Agent-friendly responses:** only the useful fields, HTML stripped, empty values dropped, long lists cut to fit
+(with a note telling the agent how to page).
 
 ### The hardest part
-_In progress._
+Making it work on *any* site without per-site code: inferring endpoint templates and which IDs are "always mine" vs. "the agent
+picks", reusing the login across bearer-token, cookie and custom-header sites, discovering actions the user never clicked
+(JavaScript scan), and letting an agent take real actions safely (preview -> approval -> execute -> verify).
 
 ### How to run it
 ```bash
 uv sync
-uv run underpass --help
+uv run playwright install chromium        # first time only
+uv run underpass add <website>            # log in, click around, close the window
+# then ask your agent anything about that site
+uv run underpass list <site>              # see the generated tools
+uv run underpass call <site> <tool> k=v   # try one from the terminal (--yes to approve an action)
+uv run underpass login <site>             # if the saved login expires
+```
+Race demo (browser agent vs. Underpass on the same question):
+```bash
+uv run python demo/race.py <site> "<question>"
 ```
 
 ### Demo

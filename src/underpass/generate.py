@@ -172,26 +172,43 @@ def generate(site: str, model: str | None = "sonnet", log=print) -> dict:
         ) + "\n\n" + focus
 
     # Two parallel requests: everything the site can SHOW, and everything it can DO.
-    parts = {
-        "reads": build_prompt(
-            [e for e in eps if not e["action"]], [c for c in code_only if c["method"] == "GET"][:120],
-            "FOCUS: this request covers READ tools only (kind='read'). Include JavaScript-only GET endpoints whose "
-            "purpose is clear from the path.",
-        ),
-        "actions": build_prompt(
-            [e for e in eps if e["action"]], [c for c in code_only if c["method"] != "GET"][:120],
-            "FOCUS: this request covers ACTION tools only (kind='action', plus POST endpoints that only fetch data as "
-            "kind='read'). Create a tool for EVERY action endpoint listed, observed or JavaScript-only, so the agent "
-            "can do everything the user can do. Skip only internal plumbing (telemetry, error logs, view/impression "
-            "logging, token fetches). For JavaScript-only actions, infer body params from the listed body fields and "
-            "the path; set unverified=true. Every action must name a verify_with read tool when one plausibly exists "
-            "(use names like list_x/get_x; it will be matched against the read tools).",
-        ),
-    }
-    log(f"Asking Claude to design tools for {len(eps)} endpoints (+{len(code_only)} found in code), reads and actions in parallel...")
+    READ_FOCUS = ("FOCUS: this request covers READ tools only (kind='read'). Include JavaScript-only GET endpoints whose "
+                  "purpose is clear from the path.")
+    ACTION_FOCUS = ("FOCUS: this request covers ACTION tools only (kind='action', plus POST endpoints that only fetch data as "
+                    "kind='read'). Create a tool for EVERY action endpoint listed, observed or JavaScript-only, so the agent "
+                    "can do everything the user can do. Skip only internal plumbing (telemetry, error logs, view/impression "
+                    "logging, token fetches). For JavaScript-only actions, infer body params from the listed body fields and "
+                    "the path; set unverified=true. Every action should name a verify_with read tool (a list_x/get_x name "
+                    "for the same kind of thing; it is matched to the real read tools afterwards).")
+
+    def chunks(items, n):
+        return [items[i:i + n] for i in range(0, len(items), n)] or [[]]
+
+    # Many small requests in parallel: much faster than one huge answer.
+    read_eps, act_eps = [e for e in eps if not e["action"]], [e for e in eps if e["action"]]
+    read_code, act_code = [c for c in code_only if c["method"] == "GET"], [c for c in code_only if c["method"] != "GET"]
+    parts = {}
+    for i, group in enumerate(chunks(read_eps, 12)):
+        parts[f"reads{i}"] = build_prompt(group, [], READ_FOCUS)
+    for i, group in enumerate(chunks(read_code, 30)):
+        if group:
+            parts[f"readcode{i}"] = build_prompt([], group, READ_FOCUS)
+    for i, group in enumerate(chunks(act_eps + [None] * 0, 18)):
+        parts[f"actions{i}"] = build_prompt(group, act_code if i == 0 and len(act_code) <= 30 else [], ACTION_FOCUS)
+    if len(act_code) > 30:
+        for i, group in enumerate(chunks(act_code, 30)):
+            parts[f"actcode{i}"] = build_prompt([], group, ACTION_FOCUS)
+    log(f"Asking Claude to design tools for {len(eps)} endpoints (+{len(code_only)} found in code) in {len(parts)} parallel batches...")
     t0 = time.time()
 
     def run(prompt):
+        try:
+            return _run(prompt)
+        except Exception as e:  # one bad batch must not sink the whole site
+            log(f"  a batch failed ({type(e).__name__}); continuing")
+            return Spec(site_summary="", tools=[])
+
+    def _run(prompt):
         raw = ask_claude(prompt, model)
         try:
             return Spec.model_validate(_extract_json(raw))
@@ -201,9 +218,10 @@ def generate(site: str, model: str | None = "sonnet", log=print) -> dict:
 
     from concurrent.futures import ThreadPoolExecutor
 
-    with ThreadPoolExecutor(2) as pool:
-        specs = dict(zip(parts, pool.map(run, parts.values())))
-    spec = Spec(site_summary=specs["reads"].site_summary, tools=specs["reads"].tools + specs["actions"].tools)
+    with ThreadPoolExecutor(12) as pool:
+        specs = list(pool.map(run, parts.values()))
+    summary = max((sp.site_summary for sp in specs), key=len, default="")
+    spec = Spec(site_summary=summary, tools=[t for sp in specs for t in sp.tools])
     log(f"Claude designed {len(spec.tools)} tools in {time.time() - t0:.0f}s.")
 
     # Keep only tools whose endpoint really exists (or came from the JS scan), and unique names.
@@ -217,9 +235,15 @@ def generate(site: str, model: str | None = "sonnet", log=print) -> dict:
         seen.add(t.name)
         tools.append(t.model_dump())
     read_names = {t["name"] for t in tools if t["kind"] == "read"}
+    def words(name):
+        return {w.rstrip("s") for w in name.split("_")} - {"get", "list", "create", "update", "delete", "submit", "add", "my", ""}
+
     for t in tools:
-        if t.get("verify_with") and t["verify_with"] not in read_names:
-            t["verify_with"] = None
+        if t["kind"] != "action" or t.get("verify_with") in read_names:
+            continue
+        # match to the read tool about the same thing, e.g. create_student_note -> list_student_notes
+        best = max(read_names, key=lambda r: (len(words(r) & words(t["name"])), r.startswith("list_")), default=None)
+        t["verify_with"] = best if best and words(best) & words(t["name"]) else None
     result = {"site": data["site"], "summary": spec.site_summary, "generated_at": time.time(), "tools": tools}
     store.write_json(d / "tools.json", result)
     return result

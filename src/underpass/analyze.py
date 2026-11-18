@@ -213,6 +213,12 @@ def _fetch_scripts(urls: list[str]) -> dict[str, str]:
         return {u: t for u, t in pool.map(get, urls) if t}
 
 
+ACTION_WORDS = re.compile(
+    r"create|add|update|edit|delete|remove|submit|save|send|mark|toggle|upload|claim|reject|approve|accept|"
+    r"cancel|pin|unpin|like|bookmark|book|enroll|register|apply|join|leave|invite|follow|vote|rate|review|reply|"
+    r"comment|post|publish|archive|restore|assign|complete|start|stop|reset|set|change",
+    re.I,
+)
 VERB = re.compile(r"\.(get|post|put|patch|delete)\s*\(", re.I)
 METHOD_KW = re.compile(r"""method\s*:\s*["'](get|post|put|patch|delete)["']""", re.I)
 HELPER_AFTER = re.compile(r"\(0\s*,\s*[\w$]+\.([\w$]+)\)\s*\(|([\w$]{1,4})\s*\(\s*[\w$]\s*[,)]")
@@ -283,6 +289,8 @@ def scan_scripts(script_urls: list[str], namespaces: set[str], known: dict[str, 
     found: dict[tuple, dict] = {}
     for path, norm, verb, helper, fields, script in sites:
         method = verb or helpers.get(helper)
+        if not method and ACTION_WORDS.search(path.rsplit("/", 1)[-1] if "{" in path.rsplit("/", 1)[-1] else path):
+            method = "DELETE" if re.search(r"delete|remove", path, re.I) else "POST"  # verb in the path: an action
         if not method or SENSITIVE_PATH.search(path) or re.search(r"error|log$|logs$|token", path, re.I):
             continue  # can't tell how it's called; skip rather than guess
         if known.get(norm) == method or (method, norm) in found:

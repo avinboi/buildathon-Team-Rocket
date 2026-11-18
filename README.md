@@ -138,7 +138,7 @@ and every button. That API is invisible to the agent.
 tools from it. The agent then reads and acts in ~1 second per call with structured data, using exactly the user's own permissions.
 
 ### What we built
-**Website with install + per-agent setup: https://underpass-mcp.vercel.app** (mirror: https://avinboi.github.io/buildathon-Team-Rocket/)
+**Website with install + per-agent setup: https://underpass-flax.vercel.app** (mirror: https://avinboi.github.io/buildathon-Team-Rocket/)
 
 Underpass is a CLI **and** an MCP server. Install once, add it to any agent (Claude Code, Codex, Cursor, Claude Desktop,
 VS Code, Windsurf, or any agent with a shell), then the **agent itself** can connect any website:

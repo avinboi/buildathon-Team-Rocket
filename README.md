@@ -183,5 +183,17 @@ Race demo (browser agent vs. Underpass on the same question):
 uv run python demo/race.py <site> "<question>"
 ```
 
+### Results (measured 18 Nov 2026 on a real student account at coach.mastersunion.org)
+- **811 API calls recorded -> 89 endpoints mapped -> 132 tools (83 read, 49 actions).**
+- **50 actions discovered from the site's JavaScript** that were never clicked: Underpass learned the site's own HTTP helpers
+  from observed calls (8 helpers) and applied them to every API path in the code.
+- `underpass check`: 60 read tools verified live, median **~0.6 s** per call.
+- Action loop verified live: `create_student_note` preview -> approve -> created (432 ms) -> auto-verified via
+  `list_student_notes` -> `delete_student_note` -> verified gone.
+- Race, same question and model ("attendance % per course and how many more classes can I miss?"):
+  browser agent **102.6 s / 18 tool calls**, Underpass **23.8 s / 3 tool calls**. Both correct.
+- Response trimming: attendance 690 KB -> 35 KB with every course kept.
+- Also works unchanged on public sites: hn.algolia.com (3 tools) and crates.io (8 tools).
+
 ### Demo
-_In progress._
+See [DEMO.md](DEMO.md) for the 2-3 minute script.

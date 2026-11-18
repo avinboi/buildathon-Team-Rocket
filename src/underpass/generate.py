@@ -108,6 +108,19 @@ def _compact(ep: dict) -> str:
     return "\n".join(lines)
 
 
+def _api_base(url: str) -> str:
+    """'https://api.x.in/api/v1/users/7' -> 'https://api.x.in/api/v1'"""
+    scheme, _, rest = url.partition("://")
+    host, _, path = rest.partition("/")
+    keep = []
+    for seg in path.split("/"):
+        if seg == "api" or re.fullmatch(r"v\d+", seg):
+            keep.append(seg)
+        else:
+            break
+    return f"{scheme}://{host}" + ("/" + "/".join(keep) if keep else "")
+
+
 def ask_claude(prompt: str, model: str | None = None, timeout: int = 600) -> str:
     exe = shutil.which("claude")
     if not exe:
@@ -147,7 +160,11 @@ def generate(site: str, model: str | None = None, log=print) -> dict:
         today=time.strftime("%Y-%m-%d"),
         schema=json.dumps(Spec.model_json_schema()),
         endpoints="\n\n".join(_compact(e) for e in eps),
-        code_only="\n".join(f"{c['method']} {c['path']}" for c in code_only) or "(none)",
+        code_only=(
+            "(paths are relative; prefix them with the matching API base: "
+            + ", ".join(sorted({_api_base(e["url"]) for e in eps}))
+            + ")\n" + "\n".join(f"{c['method']} {c['path']}" for c in code_only)
+        ) if code_only else "(none)",
     )
     log(f"Asking Claude to design tools for {len(eps)} endpoints (+{len(code_only)} found in code)...")
     t0 = time.time()

@@ -84,6 +84,49 @@ def cmd_call(args) -> int:
     return 0 if result.get("ok", True) else 1
 
 
+def cmd_check(args) -> int:
+    """Call every read tool that needs no input and report what works, how fast, and how small the answer is."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from underpass.engine import Site
+
+    site = Site(args.site)
+    reads = [t for t in site.tools.values() if t["kind"] == "read"]
+
+    def run(t):
+        if any(p.get("required") and p.get("default") is None for p in t.get("params", [])):
+            return t, None, "needs input"
+        try:
+            r = site.call(t["name"], {})
+            return t, r, None if r["ok"] else f"HTTP {r['http_status']}"
+        except Exception as e:
+            return t, None, f"{type(e).__name__}: {str(e)[:80]}"
+
+    with ThreadPoolExecutor(8) as pool:
+        results = list(pool.map(run, reads))
+    ok = [r for r in results if r[2] is None]
+    skipped = [r for r in results if r[2] == "needs input"]
+    for t, r, err in sorted(results, key=lambda x: (x[2] is not None, x[0]["name"])):
+        if err is None:
+            size = len(json.dumps(r["data"], ensure_ascii=False))
+            print(f"  OK    {t['name']:<40} {r['ms']:>5} ms  {size:>7} chars")
+        else:
+            print(f"  {'SKIP' if err == 'needs input' else 'FAIL'}  {t['name']:<40} {err}")
+    if args.prune:
+        # Drop tools guessed from the site's code that the live site rejects as non-existent / unusable.
+        dead = {t["name"] for t, r, err in results if t.get("unverified") and err and err.startswith(("HTTP 404", "HTTP 405", "HTTP 400"))}
+        path = store.site_dir(args.site) / "tools.json"
+        spec = store.read_json(path)
+        spec["tools"] = [t for t in spec["tools"] if t["name"] not in dead]
+        store.write_json(path, spec)
+        print(f"\nPruned {len(dead)} code-only tools the live site doesn't support: {', '.join(sorted(dead)) or '-'}")
+    tested = len(results) - len(skipped)
+    lat = sorted(r[1]["ms"] for r in ok)
+    print(f"\n{len(ok)}/{tested} read tools work live ({len(skipped)} need an id from another tool)."
+          + (f" Median {lat[len(lat) // 2]} ms." if lat else ""))
+    return 0
+
+
 def cmd_serve(args) -> int:
     from underpass.server import serve
 
@@ -176,6 +219,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("args", nargs="*")
     p.add_argument("--yes", action="store_true", help="Approve an action (otherwise you get a preview).")
     p.set_defaults(func=cmd_call)
+
+    p = sub.add_parser("check", help="Test every read tool against the live site.")
+    p.add_argument("site")
+    p.add_argument("--prune", action="store_true", help="Remove code-only tools that the live site rejects.")
+    p.set_defaults(func=cmd_check)
 
     p = sub.add_parser("serve", help="Run the MCP server for a site (your agent starts this).")
     p.add_argument("site")

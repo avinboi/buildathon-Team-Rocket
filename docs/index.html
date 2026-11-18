@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Underpass</title>
+<meta name="description" content="Turn any website you can log into into an MCP server and CLI your AI agent can use. Faster and more reliable than browser automation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0d10;--panel:#12161b;--line:#222a33;--text:#e8edf2;--muted:#9aa7b4;--accent:#7cf0b5;--accent2:#7cb8ff;--warn:#ffcf70;--code:#0f1318}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#fbfcfd;--panel:#fff;--line:#e3e8ee;--text:#11161c;--muted:#5b6876;--accent:#0f9d62;--accent2:#1d6fd6;--warn:#a86a00;--code:#f3f6f9}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 Inter,system-ui,sans-serif}
+a{color:var(--accent2)}
+.wrap{max-width:980px;margin:0 auto;padding:0 20px}
+nav{display:flex;justify-content:space-between;align-items:center;padding:18px 0}
+nav b{font-weight:800;letter-spacing:-.02em;font-size:20px}nav b span{color:var(--accent)}
+nav a{color:var(--muted);text-decoration:none;margin-left:18px;font-size:14px}
+.hero{padding:56px 0 30px}
+h1{font-size:clamp(34px,6vw,58px);line-height:1.05;letter-spacing:-.035em;margin:0 0 18px;font-weight:800}
+h1 em{font-style:normal;color:var(--accent)}
+.lead{font-size:clamp(17px,2.2vw,20px);color:var(--muted);max-width:720px}
+h2{font-size:28px;letter-spacing:-.02em;margin:64px 0 14px}
+h3{margin:0 0 6px;font-size:17px}
+pre,code{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;margin:10px 0;position:relative}
+pre button{position:absolute;top:8px;right:8px;background:var(--panel);border:1px solid var(--line);color:var(--muted);border-radius:6px;font-size:12px;padding:3px 8px;cursor:pointer}
+p code,li code,td code{background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.num{font-size:34px;font-weight:800;letter-spacing:-.03em;color:var(--accent)}
+.flow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:18px 0}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14px}
+.arrow{color:var(--muted)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tabs button{background:var(--panel);border:1px solid var(--line);color:var(--text);padding:7px 12px;border-radius:8px;cursor:pointer;font:500 14px Inter,sans-serif}
+.tabs button[aria-selected="true"]{border-color:var(--accent);color:var(--accent)}
+.pane{display:none}.pane.on{display:block}
+table{width:100%;border-collapse:collapse;font-size:15px}td,th{border-bottom:1px solid var(--line);padding:10px 8px;text-align:left}th{color:var(--muted);font-weight:500}
+.vs td:nth-child(3){color:var(--accent);font-weight:600}
+.note{border-left:3px solid var(--warn);padding:8px 14px;color:var(--muted);background:var(--panel);border-radius:0 8px 8px 0}
+footer{color:var(--muted);font-size:14px;padding:50px 0 40px;border-top:1px solid var(--line);margin-top:70px}
+.cta{display:inline-block;margin-top:10px;background:var(--accent);color:#06130c;font-weight:600;text-decoration:none;padding:11px 18px;border-radius:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav><b>under<span>pass</span></b><div><a href="#how">How it works</a><a href="#install">Install</a><a href="#agents">Agents</a><a href="https://github.com/avinboi/buildathon-Team-Rocket">GitHub</a></div></nav>
+
+<section class="hero">
+  <h1>Any website.<br><em>Your agent's API.</em></h1>
+  <p class="lead">Underpass turns any website you can log into into an <b>MCP server and CLI</b> for your AI agent: Claude Code, Codex, Cursor or anything else.
+  No screenshots, no clicking: your agent reads and acts through the site's own hidden API, in under a second, with your permissions.</p>
+  <a class="cta" href="#install">Install in one line</a>
+</section>
+
+<h2>Why</h2>
+<div class="grid">
+  <div class="card"><h3>Most software has no API for you</h3><p>College portals, internal company tools, vendor dashboards. Your agent can't use them, so the only option is a browser agent.</p></div>
+  <div class="card"><h3>Browser agents are slow and brittle</h3><p>Screenshot, think, click, repeat. 30-100 seconds per task, and they break when the layout changes.</p></div>
+  <div class="card"><h3>But every site already has an API</h3><p>Its own front end calls a private JSON API for every page and button. Underpass finds it and hands it to your agent.</p></div>
+</div>
+
+<h2 id="how">How it works</h2>
+<div class="flow"><span class="step">1. You log in once</span><span class="arrow">&rarr;</span><span class="step">2. Underpass explores the site</span><span class="arrow">&rarr;</span><span class="step">3. Reads its JavaScript for every action</span><span class="arrow">&rarr;</span><span class="step">4. Builds tools</span><span class="arrow">&rarr;</span><span class="step">5. Your agent uses them</span></div>
+<div class="grid">
+  <div class="card"><h3>Records the hidden API</h3><p>Captures every request the site's front end makes: reads, actions, GraphQL and form posts. Turns IDs into parameters and works out how your login travels (bearer token, cookies, headers).</p></div>
+  <div class="card"><h3>Finds actions nobody clicked</h3><p>Learns the site's own HTTP helper functions from calls it has seen, then finds every endpoint in the site's code. On one portal: 3 actions clicked, 50+ discovered.</p></div>
+  <div class="card"><h3>Tools in seconds</h3><p>Working tools are built instantly with no AI. Claude then polishes names and descriptions in the background.</p></div>
+  <div class="card"><h3>Safe actions, with proof</h3><p>Reads run directly. Actions return an exact preview, need your approval, then Underpass re-reads the site to verify the change happened.</p></div>
+</div>
+
+<h2>Measured on a real student portal</h2>
+<div class="grid">
+  <div class="card"><div class="num">4.3&times;</div><p>faster than a browser agent on the same question (23.8 s vs 102.6 s)</p></div>
+  <div class="card"><div class="num">239</div><p>tools from one login: 171 reads, 68 actions</p></div>
+  <div class="card"><div class="num">~0.5 s</div><p>median per tool call, against the live site</p></div>
+  <div class="card"><div class="num">690 KB &rarr; 35 KB</div><p>responses trimmed for agents, without dropping a single record</p></div>
+</div>
+<table class="vs" style="margin-top:16px">
+<tr><th>Same question, same model</th><th>Browser agent</th><th>Underpass</th></tr>
+<tr><td>Time</td><td>102.6 s</td><td>23.8 s</td></tr>
+<tr><td>Tool calls</td><td>18</td><td>3</td></tr>
+<tr><td>Breaks when the UI changes</td><td>yes</td><td>no</td></tr>
+</table>
+
+<h2 id="install">Install</h2>
+<p>Needs <a href="https://docs.astral.sh/uv/">uv</a>. Tool polishing uses <a href="https://claude.com/claude-code">Claude Code</a> if it's installed (optional).</p>
+<pre><code>uv tool install git+https://github.com/avinboi/buildathon-Team-Rocket
+underpass setup        # adds Underpass to Claude Code, Codex and Cursor</code></pre>
+<p>That's it. Now ask your agent: <i>"Use Underpass to connect app.example.com, then show me my open invoices."</i> A browser opens, you log in, and Underpass does the rest.</p>
+
+<h2 id="agents">Add it to your agent</h2>
+<p>Underpass is one MCP server with 4 tools (<code>underpass_sites</code>, <code>underpass_add_site</code>, <code>underpass_find_tools</code>, <code>underpass_call</code>), so it stays light in your agent's context however many sites and tools you add.</p>
+<div class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-p="cc">Claude Code</button>
+  <button role="tab" data-p="codex">Codex</button>
+  <button role="tab" data-p="cursor">Cursor</button>
+  <button role="tab" data-p="desktop">Claude Desktop</button>
+  <button role="tab" data-p="vscode">VS Code</button>
+  <button role="tab" data-p="other">Any MCP agent</button>
+  <button role="tab" data-p="cli">Any agent (CLI)</button>
+</div>
+<div class="pane on" id="cc"><pre><code>claude mcp add underpass --scope user -- underpass mcp</code></pre></div>
+<div class="pane" id="codex"><pre><code>codex mcp add underpass -- underpass mcp</code></pre><p>or in <code>~/.codex/config.toml</code>:</p><pre><code>[mcp_servers.underpass]
+command = "underpass"
+args = ["mcp"]</code></pre></div>
+<div class="pane" id="cursor"><p><code>~/.cursor/mcp.json</code>:</p><pre><code>{ "mcpServers": { "underpass": { "command": "underpass", "args": ["mcp"] } } }</code></pre></div>
+<div class="pane" id="desktop"><p><code>claude_desktop_config.json</code> (Settings &rarr; Developer &rarr; Edit Config):</p><pre><code>{ "mcpServers": { "underpass": { "command": "underpass", "args": ["mcp"] } } }</code></pre></div>
+<div class="pane" id="vscode"><p><code>.vscode/mcp.json</code>:</p><pre><code>{ "servers": { "underpass": { "type": "stdio", "command": "underpass", "args": ["mcp"] } } }</code></pre></div>
+<div class="pane" id="other"><p>Windsurf, Gemini CLI, Zed and others use the same stdio config:</p><pre><code>{ "mcpServers": { "underpass": { "command": "underpass", "args": ["mcp"] } } }</code></pre></div>
+<div class="pane" id="cli"><p>No MCP? Any agent that can run shell commands can use the CLI:</p><pre><code>underpass add app.example.com              # log in once
+underpass list app.example.com             # every tool
+underpass call app.example.com list_invoices status=unpaid
+underpass call app.example.com create_note title="Hi" --yes   # actions need --yes</code></pre></div>
+
+<h2>Try asking</h2>
+<div class="grid">
+  <div class="card"><p>"Connect my company's HR portal with Underpass and tell me how many leave days I have left."</p></div>
+  <div class="card"><p>"Which assignments haven't I submitted, and when is each due?"</p></div>
+  <div class="card"><p>"Add a note to my notes board: revise Neuroscience before Friday." (preview &rarr; approve &rarr; verified)</p></div>
+</div>
+
+<h2>Commands</h2>
+<table>
+<tr><td><code>underpass add &lt;url&gt;</code></td><td>Log in once; Underpass maps the site and builds tools</td></tr>
+<tr><td><code>underpass setup</code></td><td>Install the MCP server into Claude Code, Codex and Cursor</td></tr>
+<tr><td><code>underpass list &lt;site&gt;</code></td><td>Show a site's tools</td></tr>
+<tr><td><code>underpass call &lt;site&gt; &lt;tool&gt; k=v</code></td><td>Run a tool (<code>--yes</code> approves an action)</td></tr>
+<tr><td><code>underpass check &lt;site&gt;</code></td><td>Test every read tool against the live site</td></tr>
+<tr><td><code>underpass login &lt;site&gt;</code></td><td>Log in again when a session expires</td></tr>
+<tr><td><code>underpass mcp</code></td><td>Run the MCP server (your agent starts this)</td></tr>
+</table>
+
+<h2>Private by design</h2>
+<p class="note">Everything runs on your machine. Your login stays in <code>~/.underpass</code> and never leaves it. Passwords and OTPs are redacted, and login, logout and password endpoints never become tools. The agent can only do what your account can do, and every action needs your approval.</p>
+
+<footer>Underpass · built at the Masters' Union Buildathon, 18 Nov 2026 · <a href="https://github.com/avinboi/buildathon-Team-Rocket">source</a></footer>
+</div>
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id===b.dataset.p));
+});
+document.querySelectorAll('pre').forEach(pre=>{
+  const btn=document.createElement('button');btn.textContent='copy';
+  btn.onclick=()=>{navigator.clipboard.writeText(pre.querySelector('code').innerText);btn.textContent='copied';setTimeout(()=>btn.textContent='copy',1200)};
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>

@@ -1,4 +1,13 @@
-# Underpass demo (2-3 minutes)
+# Underpass demo video (2-3 minutes)
+
+Recorded, not live: retake any shot. Suggested shots:
+1. Website https://avinboi.github.io/buildathon-Team-Rocket/ (5 s scroll): "one install, works in any agent".
+2. Problem voice-over (below).
+3. `underpass list coach.mastersunion.org | more`: 239 tools from one login.
+4. The race (below), Underpass finishing first.
+5. In Claude Code: "Use Underpass: add a note titled 'Demo day'..." -> preview -> "yes" -> verified -> "delete it".
+6. Hard part + close.
+
 
 ## Before going on stage (T-10 min)
 ```bash
@@ -19,8 +28,8 @@ Open 2 terminals side by side (big font) + one Claude Code window.
 uv run underpass list coach.mastersunion.org
 ```
 > "I ran `underpass add coach.mastersunion.org`, logged in once and clicked around for 2 minutes. Underpass explored the rest
-> on its own, read the site's JavaScript, and Claude designed **132 tools: 83 reads and 49 actions**. 50 of those actions I never
-> clicked: Underpass found them in the site's code."
+> on its own, read the site's JavaScript, and Claude designed **239 tools: 171 reads and 68 actions**. I never clicked
+> those actions: Underpass found them in the site's own code."
 
 ## 0:40 The race (45s)
 ```bash

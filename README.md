@@ -138,20 +138,29 @@ and every button. That API is invisible to the agent.
 tools from it. The agent then reads and acts in ~1 second per call with structured data, using exactly the user's own permissions.
 
 ### What we built
-One command turns a website into tools for your agent:
+**Website with install + per-agent setup: https://avinboi.github.io/buildathon-Team-Rocket/**
+
+Underpass is a CLI **and** an MCP server. Install once, add it to any agent (Claude Code, Codex, Cursor, Claude Desktop,
+VS Code, Windsurf, or any agent with a shell), then the **agent itself** can connect any website:
 
 ```bash
-underpass add coach.mastersunion.org
+uv tool install git+https://github.com/avinboi/buildathon-Team-Rocket
+underpass setup          # adds the Underpass MCP hub to Claude Code, Codex, Cursor
 ```
+> "Use Underpass to connect coach.mastersunion.org and tell me how many classes I can still miss."
 
-1. **Record** (`record`): a browser opens; you log in and use the site. Underpass captures every API request the front end
+The hub exposes just 4 tools (`underpass_sites`, `underpass_add_site`, `underpass_find_tools`, `underpass_call`), so the
+agent's context stays small (3 KB of tool definitions instead of ~50 KB) no matter how many sites and tools exist.
+The user only logs in; everything else is automatic. Under the hood:
+
+1. **Record** (`record`): a browser opens and you log in. Login is detected automatically (auth header, login request or new session cookie) and the window closes itself. Underpass captures every API request the front end
    makes: reads, actions (POST/PUT/PATCH/DELETE with their bodies), GraphQL calls and classic form posts. Then it explores the
-   rest of the site on its own with your saved login (skipping logout/delete links).
+   site on its own, 6 pages in parallel, with your saved login (skipping logout/delete links).
 2. **Map** (`analyze`): groups calls into endpoint templates (`/term/{term_id}/attendance`), keeps real example values,
    flattens response shapes, detects how the site authenticates (bearer token / cookies / custom headers, plus token expiry),
    and **scans the site's own JavaScript for endpoints nobody clicked**. Passwords/OTPs are redacted; login/logout/telemetry
    calls never become tools.
-3. **Generate** (`generate`): Claude designs the tool list: names, plain-English descriptions, which params an agent should
+3. **Tools** (`instant` + `generate`): working tools are built instantly with no AI (ready ~20 s after login); then Claude polishes them in parallel batches: names, plain-English descriptions, which params an agent should
    vary vs. fixed defaults, which response fields matter, and for every action, a read tool that verifies it worked.
 4. **Serve** (`serve`): a generic MCP server exposes the tools to Claude Code / Claude Desktop / Cursor. `add` registers it
    automatically. `call` and `list` use the same engine from the terminal.
@@ -189,7 +198,7 @@ uv run python demo/race.py <site> "<question>"
 ```
 
 ### Results (measured 18 Nov 2026 on a real student account at coach.mastersunion.org)
-- **811 API calls recorded -> 89 endpoints mapped -> 132 tools (83 read, 49 actions).**
+- **One login -> 239 tools (171 read, 68 actions)**; instant tools ready ~20 s after exploration.
 - **50 actions discovered from the site's JavaScript** that were never clicked: Underpass learned the site's own HTTP helpers
   from observed calls (8 helpers) and applied them to every API path in the code.
 - `underpass check`: 60 read tools verified live, median **~0.6 s** per call.

@@ -93,7 +93,7 @@ class Recorder:
             "page": resp.frame.url if resp.frame else None,
         }
         with self.out.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.write(json.dumps(entry) + "\n")  # ascii-escaped: raw U+2028 would break splitlines()
         self.count += 1
         if method in WRITE_METHODS:
             self.writes += 1
@@ -130,6 +130,8 @@ def _same_site_links(page, domain: str) -> list[str]:
 def crawl(context: BrowserContext, start: str, domain: str, max_pages: int, log=print) -> int:
     """Visit same-site pages breadth-first. Links that look destructive (logout/delete) are skipped."""
     seen, queue, visited = {start}, [start], 0
+    _p = urlparse(start)
+    seen.add(_p.hostname + "/".join("#" if any(c.isdigit() for c in s) else s for s in (_p.path or "/").split("/")))  # landing page, so "/" is not revisited
     page = context.new_page()
     while queue and visited < max_pages:
         url = queue.pop(0)

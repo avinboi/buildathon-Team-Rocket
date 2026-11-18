@@ -49,12 +49,43 @@ def _param_name(prev: str, used: set[str]) -> str:
     return n
 
 
-def template_path(path: str) -> tuple[str, dict[str, str]]:
+def slug_positions(urls: list[tuple[str, str, str]], min_variants: int = 3) -> dict:
+    """Find path segments that are really names/slugs (e.g. /crates/serde, /crates/tokio, /crates/rand).
+
+    (method, host, path) triples that are identical except for ONE segment, with >= min_variants different
+    values there, share one endpoint template. Returns {(method, host, path): {segment_index, ...}}.
+    """
+    buckets: dict[tuple, set] = defaultdict(set)
+    parents: set[tuple] = set()  # (method, host, segments) that have longer paths below them
+    for m, h, p in set(urls):
+        segs = p.split("/")
+        for i in range(1, len(segs) - 1):
+            parents.add((m, h, tuple(segs[: i + 1])))
+        for i in range(1, len(segs)):
+            if segs[i]:
+                buckets[(m, h, i, tuple(segs[:i] + ["*"] + segs[i + 1:]))].add(segs[i])
+    out: dict = defaultdict(set)
+    for m, h, p in set(urls):
+        segs = p.split("/")
+        for i in range(1, len(segs)):
+            if not segs[i]:
+                continue
+            vals = buckets[(m, h, i, tuple(segs[:i] + ["*"] + segs[i + 1:]))]
+            if len(vals) < min_variants:
+                continue
+            # real slugs all have the same shape below them; fixed route names (/v1/crates vs /v1/summary) don't
+            shapes = {(m, h, tuple(segs[:i] + [v])) in parents for v in vals}
+            if len(shapes) == 1:
+                out[(m, h, p)].add(i)
+    return out
+
+
+def template_path(path: str, slugs: set | None = None) -> tuple[str, dict[str, str]]:
     """'/programTerm/77/attandance' -> ('/programTerm/{programTerm_id}/attandance', {'programTerm_id': '77'})"""
     segs = path.split("/")
     out, params, used = [], {}, set()
     for i, s in enumerate(segs):
-        if _is_id(s):
+        if _is_id(s) or (slugs and i in slugs):
             name = _param_name(segs[i - 1] if i else "id", used)
             out.append("{" + name + "}")
             params[name] = s
@@ -208,11 +239,12 @@ def analyze(site: str, scan_js: bool = True, log=print) -> dict:
     if not entries:
         raise SystemExit(f"No recording found for {site}. Run `underpass record {site}` first.")
 
+    slugs = slug_positions([(e["method"], urlparse(e["url"]).hostname, urlparse(e["url"]).path) for e in entries])
     groups: dict[str, dict] = {}
     for e in entries:
         u = urlparse(e["url"])
         method = e["method"]
-        tpl, path_params = template_path(u.path)
+        tpl, path_params = template_path(u.path, slugs.get((method, u.hostname, u.path)))
         kind, body = _parse_body(e)
         op, op_kind = _graphql_op(e, body)
         body = redact(body)

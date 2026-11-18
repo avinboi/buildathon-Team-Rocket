@@ -169,15 +169,20 @@ picks", reusing the login across bearer-token, cookie and custom-header sites, d
 (JavaScript scan), and letting an agent take real actions safely (preview -> approval -> execute -> verify).
 
 ### How to run it
+**Anyone can install it** (Windows/macOS/Linux; needs [uv](https://docs.astral.sh/uv/) and [Claude Code](https://claude.com/claude-code) logged in):
 ```bash
-uv sync
-uv run playwright install chromium        # first time only
-uv run underpass add <website>            # log in, click around, close the window
-# then ask your agent anything about that site
-uv run underpass list <site>              # see the generated tools
-uv run underpass call <site> <tool> k=v   # try one from the terminal (--yes to approve an action)
-uv run underpass login <site>             # if the saved login expires
+uv tool install git+https://github.com/avinboi/buildathon-Team-Rocket
+underpass add <website>          # a browser opens: log in, click around, close it. The browser downloads itself on first run.
 ```
+Then open Claude Code and ask anything about that site. Other commands:
+```bash
+underpass list <site>              # see the generated tools
+underpass check <site>             # test every read tool live
+underpass call <site> <tool> k=v   # call one from the terminal (--yes to approve an action)
+underpass login <site>             # if the saved login expires
+```
+From a clone instead: `uv sync`, then prefix commands with `uv run`.
+
 Race demo (browser agent vs. Underpass on the same question):
 ```bash
 uv run python demo/race.py <site> "<question>"

@@ -19,7 +19,7 @@ from urllib.parse import quote, urlencode, urlparse
 
 from underpass import store
 
-MAX_RESPONSE_CHARS = 30_000
+MAX_RESPONSE_CHARS = 16_000
 TAG = re.compile(r"<[^>]+>")
 STATUSY = re.compile(
     r"status|state|submi|complet|done|exists|^is[A-Z_]|^has[A-Z_]|^can[A-Z_]|attend|present|absent|due|deadline"

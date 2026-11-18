@@ -4,9 +4,11 @@ import inspect
 import json
 import keyword
 import re
+from typing import Annotated
 
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from underpass.engine import LoginExpired, Site
 
@@ -30,12 +32,15 @@ def _make_fn(site: Site, tool: dict):
         typ = PY_TYPES.get(p.get("type"), str)
         default = inspect.Parameter.empty if p.get("required") else p.get("default")
         annotation = typ if p.get("required") else (typ | None)
+        if p.get("description"):
+            annotation = Annotated[annotation, Field(description=p["description"])]
         params.append(inspect.Parameter(ident, inspect.Parameter.KEYWORD_ONLY, default=default, annotation=annotation))
     is_action = tool["kind"] == "action"
     if is_action:
         params.append(inspect.Parameter("confirm", inspect.Parameter.KEYWORD_ONLY, default=False, annotation=bool))
     else:
-        params.append(inspect.Parameter("all_fields", inspect.Parameter.KEYWORD_ONLY, default=False, annotation=bool))
+        params.append(inspect.Parameter("all_fields", inspect.Parameter.KEYWORD_ONLY, default=False, annotation=Annotated[
+            bool, Field(description="true = full untrimmed response, if a field you need is missing")]))
 
     def fn(**kwargs):
         confirm = bool(kwargs.pop("confirm", False))
@@ -71,15 +76,11 @@ def build_server(site_name: str) -> MCPServer:
             desc = "[ACTION: changes data; needs confirm=true after user approval] " + desc
         if tool.get("unverified"):
             desc += " (Found in the site's code; not yet seen in use.)"
-        if tool["kind"] == "read":
-            desc += "\n- all_fields: true returns the full untrimmed response (use if a field you need is missing)."
-        for p in tool.get("params", []):
-            if p.get("description"):
-                desc += f"\n- {p['name']}: {p['description']}"
         server.add_tool(
             _make_fn(site, tool),
             name=tool["name"],
             description=desc,
+            structured_output=False,
             annotations=ToolAnnotations(
                 readOnlyHint=tool["kind"] == "read",
                 destructiveHint=tool["kind"] == "action" and tool["method"] == "DELETE",

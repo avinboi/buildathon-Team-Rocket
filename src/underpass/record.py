@@ -99,6 +99,21 @@ class Recorder:
             self.writes += 1
 
 
+def _launch(p, headless: bool, log=print):
+    """Launch Chromium; on first use, download it automatically."""
+    try:
+        return p.chromium.launch(headless=headless)
+    except Exception as e:
+        if "Executable doesn't exist" not in str(e) and "playwright install" not in str(e):
+            raise
+        import subprocess
+        import sys
+
+        log("First run: downloading the browser Underpass uses (one time, ~150 MB)...")
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+        return p.chromium.launch(headless=headless)
+
+
 def _wait_until_closed(context: BrowserContext) -> None:
     """Block until the user has closed every tab/window, while still processing browser events."""
     while True:
@@ -170,7 +185,7 @@ def record(url: str, explore: bool = True, max_pages: int = 25, headless_login: 
 
     with sync_playwright() as p:
         # Phase 1: the user drives.
-        browser = p.chromium.launch(headless=headless_login)
+        browser = _launch(p, headless=headless_login, log=log)
         context = browser.new_context(
             storage_state=str(state) if state.exists() else None, viewport={"width": 1366, "height": 860}
         )
@@ -193,7 +208,7 @@ def record(url: str, explore: bool = True, max_pages: int = 25, headless_login: 
         # Phase 2: Underpass explores on its own with the saved login.
         if explore:
             log("Exploring the rest of the site on its own...")
-            browser = p.chromium.launch(headless=True)
+            browser = _launch(p, headless=True, log=log)
             context = browser.new_context(storage_state=str(state), viewport={"width": 1366, "height": 860})
             auto = Recorder(traffic, domain, "explore")
             context.on("response", auto.on_response)

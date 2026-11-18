@@ -148,13 +148,13 @@ def _extract_json(text: str) -> dict:
     return json.loads(text[start: end + 1])
 
 
-def generate(site: str, model: str | None = None, log=print) -> dict:
+def generate(site: str, model: str | None = "sonnet", log=print) -> dict:
     d = store.site_dir(site)
     data = store.read_json(d / "endpoints.json")
     if not data:
         raise SystemExit(f"Run `underpass analyze {site}` first.")
     eps = [e for e in data["endpoints"] if not e["sensitive"] and e["ok"] > 0]
-    code_only = data.get("from_code", [])[:80]
+    code_only = data.get("from_code", [])[:160]
     prompt = PROMPT.format(
         site=data["site"],
         today=time.strftime("%Y-%m-%d"),
@@ -163,7 +163,10 @@ def generate(site: str, model: str | None = None, log=print) -> dict:
         code_only=(
             "(paths are relative; prefix them with the matching API base: "
             + ", ".join(sorted({_api_base(e["url"]) for e in eps}))
-            + ")\n" + "\n".join(f"{c['method']} {c['path']}" for c in code_only)
+            + ")\n" + "\n".join(
+                f"{c['method']} {c['path']}" + (f"  body fields: {', '.join(c['body_fields'])}" if c.get("body_fields") else "")
+                for c in code_only
+            )
         ) if code_only else "(none)",
     )
     log(f"Asking Claude to design tools for {len(eps)} endpoints (+{len(code_only)} found in code)...")

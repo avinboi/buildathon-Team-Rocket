@@ -199,37 +199,99 @@ def build_auth(entries: list[dict]) -> dict:
     return auth
 
 
-def scan_scripts(script_urls: list[str], namespaces: set[str], known: set[str], log=print) -> list[dict]:
-    """Find API paths in the site's JavaScript that were never called while recording.
+def _fetch_scripts(urls: list[str]) -> dict[str, str]:
+    from concurrent.futures import ThreadPoolExecutor
 
-    Only paths whose first segment matches a namespace the real API uses (e.g. /users, /program) are kept,
-    so front-end page routes and asset paths are ignored.
+    def get(u):
+        try:
+            req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
+            return u, urllib.request.urlopen(req, timeout=20).read(8_000_000).decode("utf-8", "ignore")
+        except Exception:
+            return u, ""
+
+    with ThreadPoolExecutor(16) as pool:
+        return {u: t for u, t in pool.map(get, urls) if t}
+
+
+VERB = re.compile(r"\.(get|post|put|patch|delete)\s*\(", re.I)
+METHOD_KW = re.compile(r"""method\s*:\s*["'](get|post|put|patch|delete)["']""", re.I)
+HELPER_AFTER = re.compile(r"\(0\s*,\s*[\w$]+\.([\w$]+)\)\s*\(|([\w$]{1,4})\s*\(\s*[\w$]\s*[,)]")
+HELPER_BEFORE = re.compile(r"(?:\(0\s*,\s*[\w$]+\.([\w$]+)\)|([\w$]{1,4}))\s*\(\s*$")
+
+
+def _call_site(js: str, start: int, end: int):
+    """Return (verb, helper) for the HTTP call that uses the path literal at js[start:end]."""
+    before = js[max(0, start - 60): start]
+    after = js[end: end + 260]
+    m = re.search(r"\.(get|post|put|patch|delete)\s*\(\s*$", before, re.I)
+    if m:
+        return m.group(1).upper(), None
+    m = HELPER_BEFORE.search(before)
+    if m:
+        return None, m.group(1) or m.group(2)
+    m = METHOD_KW.search(js[max(0, start - 200): end + 200])
+    if m:
+        return m.group(1).upper(), None
+    m = VERB.search(after[:120])
+    if m:
+        return m.group(1).upper(), None
+    m = HELPER_AFTER.search(after)
+    if m:
+        return None, m.group(1) or m.group(2)
+    return None, None
+
+
+def _body_fields(js: str, end: int) -> list[str]:
+    """Field names sent with the request: an object literal right after the path, or FormData appends nearby."""
+    after = js[end: end + 500]
+    m = re.match(r"""[^,()]{0,80},\s*\{([^{}]{0,400})\}""", after)
+    keys = re.findall(r"""(?:^|,)\s*["']?([A-Za-z_$][\w$]*)["']?\s*:""", m.group(1)) if m else []
+    keys += re.findall(r"""\.append\(\s*["']([\w$]+)["']""", js[max(0, end - 600): end])
+    return list(dict.fromkeys(keys))[:15]
+
+
+def scan_scripts(script_urls: list[str], namespaces: set[str], known: dict[str, str], log=print) -> list[dict]:
+    """Find API endpoints in the site's JavaScript that were never called while recording, with their method.
+
+    The site's own HTTP helper functions are learned from calls we DID see: if '/student/notes' was a POST
+    and the code calls it through helper `Ay`, then every other path passed to `Ay` is a POST too.
+    `known` maps normalized observed paths (relative to the API base) to their method.
     """
     lit = re.compile(r"""["'`](/[A-Za-z][A-Za-z0-9_\-/.${}:]*?)(?:\?[^"'`]*)?["'`]""")
-    method_near = re.compile(r"""(?:\.|method\s*:\s*["'])(get|post|put|patch|delete)\b""", re.I)
-    found: dict[str, dict] = {}
-    for url in script_urls[:60]:
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            js = urllib.request.urlopen(req, timeout=15).read(6_000_000).decode("utf-8", "ignore")
-        except Exception:
-            continue
+    scripts = _fetch_scripts(script_urls)
+    sites = []  # (path, norm, verb, helper, fields, script)
+    for url, js in scripts.items():
         for m in lit.finditer(js):
             path = m.group(1)
             if re.search(r"\.(js|css|png|svg|jpe?g|gif|webp|ico|woff2?|json|html|map)$", path):
                 continue
             path = re.sub(r"\$\{[^}]*\}", "{param}", path).rstrip("/")
-            segs = [s for s in path.split("/") if s]
+            segs = [x for x in path.split("/") if x]
             if len(segs) < 2 or segs[0] not in namespaces:
                 continue
-            window = js[max(0, m.start() - 120): m.start() + len(path) + 120]
-            mm = method_near.findall(window)
-            method = mm[-1].upper() if mm else "GET"
-            norm = re.sub(r"\{[^}]+\}", "{}", path)
-            if norm in known or path in found:
-                continue
-            found[path] = {"method": method, "path": path, "script": url.rsplit("/", 1)[-1][:60]}
-    log(f"  scanned {min(len(script_urls), 60)} scripts, found {len(found)} endpoints that were never called")
+            verb, helper = _call_site(js, m.start(), m.end())
+            norm = re.sub(r"\{[^}]+\}", "{}", "/" + "/".join(segs))
+            sites.append((path, norm, verb, helper, _body_fields(js, m.end()), url.rsplit("/", 1)[-1][:60]))
+
+    # Learn helper -> method from paths whose method we observed.
+    votes: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for path, norm, verb, helper, _, _ in sites:
+        if helper and norm in known:
+            votes[helper][known[norm]] += 1
+    helpers = {h: max(v, key=v.get) for h, v in votes.items()}
+
+    found: dict[tuple, dict] = {}
+    for path, norm, verb, helper, fields, script in sites:
+        method = verb or helpers.get(helper)
+        if not method or SENSITIVE_PATH.search(path) or re.search(r"error|log$|logs$|token", path, re.I):
+            continue  # can't tell how it's called; skip rather than guess
+        if known.get(norm) == method or (method, norm) in found:
+            continue
+        found[(method, norm)] = {"method": method, "path": path, "body_fields": fields, "script": script}
+    writes = sum(f["method"] != "GET" for f in found.values())
+    log(f"  scanned {len(scripts)} scripts; learned {len(helpers)} HTTP helpers "
+        f"({', '.join(f'{h}={m}' for h, m in list(helpers.items())[:6])})")
+    log(f"  found {len(found)} endpoints that were never called ({writes} actions)")
     return list(found.values())
 
 
@@ -296,14 +358,14 @@ def analyze(site: str, scan_js: bool = True, log=print) -> dict:
         })
 
     # API namespaces = first path segment after any /api/vN prefix, on hosts that served JSON.
-    namespaces, known = set(), set()
+    namespaces, known = set(), {}
     for ep in endpoints:
         segs = [s for s in ep["path"].split("/") if s]
         while segs and (segs[0] == "api" or re.fullmatch(r"v\d+", segs[0])):
             segs.pop(0)
         if segs:
             namespaces.add(segs[0])
-        known.add(re.sub(r"\{[^}]+\}", "{}", "/" + "/".join(segs)))
+        known[re.sub(r"\{[^}]+\}", "{}", "/" + "/".join(segs))] = ep["method"]
 
     code_only = []
     if scan_js:

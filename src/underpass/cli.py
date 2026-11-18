@@ -47,7 +47,7 @@ def cmd_analyze(args) -> int:
 def cmd_generate(args) -> int:
     from underpass.generate import generate
 
-    spec = generate(args.site, model=args.model)
+    spec = generate(args.site, model=args.model or "sonnet")
     _print_tools(spec)
     return 0
 
@@ -166,7 +166,7 @@ def cmd_add(args) -> int:
         f"({report['reads']} read, {report['actions']} actions), {report['found_in_code_only']} more found in the site's code"
     )
     print(f"  login: {', '.join(f'{h} ({s})' for h, s in report['auth'].items())}")
-    spec = generate(site, model=args.model)
+    spec = generate(site, model=args.model or "sonnet")
     _print_tools(spec)
     if not args.no_register:
         print("\n" + register(site))

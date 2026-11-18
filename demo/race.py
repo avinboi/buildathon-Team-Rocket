@@ -17,6 +17,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 HOME = Path.home() / ".underpass" / "sites"
+HUB = False  # --hub: use the single Underpass hub server (4 tools) instead of one tool per endpoint
 print_lock = threading.Lock()
 
 
@@ -53,6 +54,8 @@ def mcp_config(side: str, host: str, start_url: str | None) -> tuple[dict, str, 
     py = REPO / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     py = str(py) if py.exists() else sys.executable
     name = short_name(host)
+    if HUB:
+        return {"mcpServers": {"underpass": {"command": py, "args": ["-m", "underpass", "mcp"]}}}, "underpass", warn
     return {"mcpServers": {name: {"command": py, "args": ["-m", "underpass", "serve", host]}}}, name, warn
 
 
@@ -119,6 +122,7 @@ def main() -> int:
     ap.add_argument("question")
     ap.add_argument("--only", choices=["browser", "underpass"])
     ap.add_argument("--start-url")
+    ap.add_argument("--hub", action="store_true", help="Underpass side uses the 4-tool hub server")
     a = ap.parse_args()
     host = site_host(a.site)
     start = a.start_url
@@ -127,6 +131,8 @@ def main() -> int:
             start = json.loads((HOME / host / "site.json").read_text(encoding="utf-8")).get("start_url")
         except Exception:  # noqa: BLE001
             start = a.site if "://" in a.site else f"https://{host}"
+    global HUB
+    HUB = a.hub
     sides = [a.only] if a.only else ["browser", "underpass"]
     if "underpass" in sides and not (HOME / host / "tools.json").exists():
         print(f"warning: {HOME / host / 'tools.json'} missing; run `underpass generate {host}` first", file=sys.stderr)

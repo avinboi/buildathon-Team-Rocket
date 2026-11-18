@@ -21,6 +21,11 @@ from underpass import store
 
 MAX_RESPONSE_CHARS = 30_000
 TAG = re.compile(r"<[^>]+>")
+STATUSY = re.compile(
+    r"status|state|submi|complet|done|exists|^is[A-Z_]|^has[A-Z_]|^can[A-Z_]|attend|present|absent|due|deadline"
+    r"|grade|score|marks|result|paid|pending|approved|read|seen|locked|active|enabled|count|total",
+    re.I,
+)
 
 
 class LoginExpired(Exception):
@@ -68,6 +73,11 @@ def project(data, fields: list[str]):
             return [walk(v, node) for v in value]
         if isinstance(value, dict):
             out = {k: walk(value[k], sub) for k, sub in node.items() if k in value}
+            if out:
+                # Never trim away status-like facts next to the kept fields (e.g. 'latestSubmissionExists').
+                for k, v in value.items():
+                    if k not in out and not isinstance(v, (dict, list)) and STATUSY.search(k):
+                        out[k] = v
             return out if out else None
         return value
 
@@ -201,7 +211,7 @@ class Site:
             payload = raw.decode("utf-8", "ignore")[:2000]
         return status, payload
 
-    def call(self, tool_name: str, args: dict | None = None, confirm: bool = False) -> dict:
+    def call(self, tool_name: str, args: dict | None = None, confirm: bool = False, all_fields: bool = False) -> dict:
         args = dict(args or {})
         tool = self.tools.get(tool_name)
         if not tool:
@@ -220,7 +230,8 @@ class Site:
         t0 = time.time()
         status, payload = self._send(req)
         ms = round((time.time() - t0) * 1000)
-        data, note = shrink(clean(project(payload, tool.get("keep_fields", []))) if 200 <= status < 300 else payload)
+        fields = [] if all_fields else tool.get("keep_fields", [])
+        data, note = shrink(clean(project(payload, fields)) if 200 <= status < 300 else payload)
         result = {"ok": 200 <= status < 300, "http_status": status, "ms": ms, "data": data}
         if note:
             result["note"] = note

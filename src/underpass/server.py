@@ -34,12 +34,15 @@ def _make_fn(site: Site, tool: dict):
     is_action = tool["kind"] == "action"
     if is_action:
         params.append(inspect.Parameter("confirm", inspect.Parameter.KEYWORD_ONLY, default=False, annotation=bool))
+    else:
+        params.append(inspect.Parameter("all_fields", inspect.Parameter.KEYWORD_ONLY, default=False, annotation=bool))
 
     def fn(**kwargs):
         confirm = bool(kwargs.pop("confirm", False))
+        all_fields = bool(kwargs.pop("all_fields", False))
         args = {mapping[k]: v for k, v in kwargs.items() if k in mapping and v is not None}
         try:
-            result = site.call(tool["name"], args, confirm=confirm)
+            result = site.call(tool["name"], args, confirm=confirm, all_fields=all_fields)
         except LoginExpired as e:
             result = {"ok": False, "error": str(e)}
         except Exception as e:
@@ -68,6 +71,8 @@ def build_server(site_name: str) -> MCPServer:
             desc = "[ACTION: changes data; needs confirm=true after user approval] " + desc
         if tool.get("unverified"):
             desc += " (Found in the site's code; not yet seen in use.)"
+        if tool["kind"] == "read":
+            desc += "\n- all_fields: true returns the full untrimmed response (use if a field you need is missing)."
         for p in tool.get("params", []):
             if p.get("description"):
                 desc += f"\n- {p['name']}: {p['description']}"

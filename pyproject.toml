@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Turn any website you can log into into a CLI and MCP server your AI agent can use."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "mcp>=1.20",
+    "playwright>=1.65.2",
+    "pydantic>=2.14.3",
+]
 
 [project.scripts]
 underpass = "underpass.cli:main"

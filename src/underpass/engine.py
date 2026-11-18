@@ -119,27 +119,35 @@ def shrink(value, limit: int = MAX_RESPONSE_CHARS):
         value = _cap_strings(value, cap)
         text = json.dumps(value, ensure_ascii=False)
         note = f"Long text fields were shortened to {cap} chars; call with all_fields=true or a detail tool for full text."
+    # Then cut lists, innermost first: per-item detail (e.g. each course's sessions) goes before the
+    # top-level list the agent asked for (the courses themselves).
+    cut_paths = set()
     while len(text) > limit:
-        longest, parent_key = None, None
+        lists = []  # (depth, list, path)
 
-        def find(v, path):
-            nonlocal longest, parent_key
+        def find(v, path, depth):
             if isinstance(v, list):
-                if longest is None or len(v) > len(longest):
-                    longest, parent_key = v, path
+                if len(v) > 1:
+                    lists.append((depth, v, path))
                 for x in v:
-                    find(x, path)
+                    find(x, path + "[]", depth + 1)
             elif isinstance(v, dict):
                 for k, x in v.items():
-                    find(x, f"{path}.{k}" if path else k)
+                    find(x, f"{path}.{k}" if path else k, depth + 1)
 
-        find(value, "")
-        if not longest or len(longest) <= 1:
+        find(value, "", 0)
+        if not lists:
             text = text[:limit]
             break
-        del longest[len(longest) // 2:]
-        note = f"Long lists were shortened to fit (e.g. '{parent_key}'). Use filters/pagination params for more."
+        deepest = max(d for d, _, _ in lists)
+        for d, lst, path in lists:
+            if d == deepest:
+                del lst[max(1, len(lst) // 2):]
+                cut_paths.add(path)
         text = json.dumps(value, ensure_ascii=False)
+    if cut_paths:
+        note = (f"To fit, some nested lists were shortened: {', '.join(sorted(cut_paths)[:4])}. "
+                "Top-level items are kept first; use a detail tool, filters or all_fields=true for more.")
     return value, note
 
 

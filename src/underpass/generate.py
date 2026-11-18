@@ -154,30 +154,56 @@ def generate(site: str, model: str | None = "sonnet", log=print) -> dict:
     if not data:
         raise SystemExit(f"Run `underpass analyze {site}` first.")
     eps = [e for e in data["endpoints"] if not e["sensitive"] and e["ok"] > 0]
-    code_only = data.get("from_code", [])[:160]
-    prompt = PROMPT.format(
-        site=data["site"],
-        today=time.strftime("%Y-%m-%d"),
-        schema=json.dumps(Spec.model_json_schema()),
-        endpoints="\n\n".join(_compact(e) for e in eps),
-        code_only=(
-            "(paths are relative; prefix them with the matching API base: "
-            + ", ".join(sorted({_api_base(e["url"]) for e in eps}))
-            + ")\n" + "\n".join(
-                f"{c['method']} {c['path']}" + (f"  body fields: {', '.join(c['body_fields'])}" if c.get("body_fields") else "")
-                for c in code_only
-            )
-        ) if code_only else "(none)",
-    )
-    log(f"Asking Claude to design tools for {len(eps)} endpoints (+{len(code_only)} found in code)...")
+    code_only = data.get("from_code", [])
+    bases = ", ".join(sorted({_api_base(e["url"]) for e in eps}))
+
+    def build_prompt(endpoints, code, focus):
+        return PROMPT.format(
+            site=data["site"],
+            today=time.strftime("%Y-%m-%d"),
+            schema=json.dumps(Spec.model_json_schema()),
+            endpoints="\n\n".join(_compact(e) for e in endpoints) or "(none)",
+            code_only=(
+                f"(paths are relative; prefix them with the matching API base: {bases})\n" + "\n".join(
+                    f"{c['method']} {c['path']}" + (f"  body fields: {', '.join(c['body_fields'])}" if c.get("body_fields") else "")
+                    for c in code
+                )
+            ) if code else "(none)",
+        ) + "\n\n" + focus
+
+    # Two parallel requests: everything the site can SHOW, and everything it can DO.
+    parts = {
+        "reads": build_prompt(
+            [e for e in eps if not e["action"]], [c for c in code_only if c["method"] == "GET"][:120],
+            "FOCUS: this request covers READ tools only (kind='read'). Include JavaScript-only GET endpoints whose "
+            "purpose is clear from the path.",
+        ),
+        "actions": build_prompt(
+            [e for e in eps if e["action"]], [c for c in code_only if c["method"] != "GET"][:120],
+            "FOCUS: this request covers ACTION tools only (kind='action', plus POST endpoints that only fetch data as "
+            "kind='read'). Create a tool for EVERY action endpoint listed, observed or JavaScript-only, so the agent "
+            "can do everything the user can do. Skip only internal plumbing (telemetry, error logs, view/impression "
+            "logging, token fetches). For JavaScript-only actions, infer body params from the listed body fields and "
+            "the path; set unverified=true. Every action must name a verify_with read tool when one plausibly exists "
+            "(use names like list_x/get_x; it will be matched against the read tools).",
+        ),
+    }
+    log(f"Asking Claude to design tools for {len(eps)} endpoints (+{len(code_only)} found in code), reads and actions in parallel...")
     t0 = time.time()
-    raw = ask_claude(prompt, model)
-    try:
-        spec = Spec.model_validate(_extract_json(raw))
-    except (ValidationError, ValueError) as e:
-        log("First answer didn't validate, asking Claude to fix it...")
-        raw = ask_claude(prompt + f"\n\nYour previous answer failed validation:\n{str(e)[:1500]}\nReturn corrected JSON only.", model)
-        spec = Spec.model_validate(_extract_json(raw))
+
+    def run(prompt):
+        raw = ask_claude(prompt, model)
+        try:
+            return Spec.model_validate(_extract_json(raw))
+        except (ValidationError, ValueError) as e:
+            raw = ask_claude(prompt + f"\n\nYour previous answer failed validation:\n{str(e)[:1500]}\nReturn corrected JSON only.", model)
+            return Spec.model_validate(_extract_json(raw))
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(2) as pool:
+        specs = dict(zip(parts, pool.map(run, parts.values())))
+    spec = Spec(site_summary=specs["reads"].site_summary, tools=specs["reads"].tools + specs["actions"].tools)
     log(f"Claude designed {len(spec.tools)} tools in {time.time() - t0:.0f}s.")
 
     # Keep only tools whose endpoint really exists (or came from the JS scan), and unique names.
@@ -190,6 +216,10 @@ def generate(site: str, model: str | None = "sonnet", log=print) -> dict:
             t.unverified = True
         seen.add(t.name)
         tools.append(t.model_dump())
+    read_names = {t["name"] for t in tools if t["kind"] == "read"}
+    for t in tools:
+        if t.get("verify_with") and t["verify_with"] not in read_names:
+            t["verify_with"] = None
     result = {"site": data["site"], "summary": spec.site_summary, "generated_at": time.time(), "tools": tools}
     store.write_json(d / "tools.json", result)
     return result

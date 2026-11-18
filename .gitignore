@@ -24,3 +24,10 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Underpass local data (recorded traffic contains login sessions: never commit)
+sites/
+*.state.json
+
+# Lockfiles (not counted as work, per RULES.md)
+uv.lock

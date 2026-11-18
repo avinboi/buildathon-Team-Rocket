@@ -1,9 +1,12 @@
 {
   "team_name": "Team Rocket",
-  "project_title": "TBD",
-  "one_liner": "TBD: a tool that fixes something AI agents struggle with",
+  "project_title": "Underpass",
+  "one_liner": "Turn any website you can log into into a CLI and MCP server, so your AI agent can read and do everything you can there.",
   "track": "ai-agents",
   "members": [
-    { "name": "Avin Dev", "github": "avinboi" }
+    {
+      "name": "Avin Dev",
+      "github": "avinboi"
+    }
   ]
 }

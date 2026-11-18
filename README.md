@@ -118,11 +118,36 @@ See [RULES.md](RULES.md) for the full list.
 
 ## Your project
 
-_Replace this section with your project README:_
-- **Team:**
-- **Track:**
-- **Problem:** who faces it and why it happens
-- **What we built:** the core workflow
-- **The hardest part:** how we solved it
-- **How to run it:**
-- **Demo / screenshots:**
+# Underpass
+
+**Turn any website you can log into into a CLI and an MCP server, so your AI agent can do anything you can do there.**
+
+- **Team:** Team Rocket (Avin Dev, solo)
+- **Track:** Build for AI Agents (`ai-agents`)
+
+### Problem
+**Who:** anyone who wants an AI agent to work inside a website that has no public API or MCP server: a student's college portal,
+an employee's internal company software, a small vendor dashboard. That's most of the software people actually use at work.
+
+**Why it happens:** agents can only act through tools. Most websites never ship an API or MCP for end users, so today the agent's
+only option is a browser agent that screenshots and clicks. That takes 30-60 seconds per task, breaks when the layout changes,
+and re-reasons every click. But every modern site already has a full private JSON API: its own front end calls it for every page
+and every button. That API is invisible to the agent.
+
+**Insight:** record that hidden API once while the user is logged in, map everything the site can show and do, and generate typed
+tools from it. The agent then reads and acts in ~1 second per call with structured data, using exactly the user's own permissions.
+
+### What we built
+_In progress._ Pipeline: `underpass record` -> `analyze` -> `generate` -> `serve` / `call`.
+
+### The hardest part
+_In progress._
+
+### How to run it
+```bash
+uv sync
+uv run underpass --help
+```
+
+### Demo
+_In progress._

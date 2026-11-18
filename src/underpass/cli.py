@@ -14,6 +14,16 @@ def cmd_record(args) -> int:
     return 0
 
 
+def cmd_analyze(args) -> int:
+    import json
+
+    from underpass.analyze import analyze
+
+    report = analyze(args.site, scan_js=not args.no_js)
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def not_yet(args) -> int:
     print(f"`underpass {args.command}` is not implemented yet.", file=sys.stderr)
     return 1
@@ -31,8 +41,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--headless", action="store_true", help="Don't show the browser (reuses a saved login).")
     p.set_defaults(func=cmd_record)
 
+    p = sub.add_parser("analyze", help="Map everything the site can show and do from the recording.")
+    p.add_argument("site", help="Site name or URL, e.g. coach.mastersunion.org")
+    p.add_argument("--no-js", action="store_true", help="Don't scan the site's JavaScript for extra endpoints.")
+    p.set_defaults(func=cmd_analyze)
+
     for name, help_text in {
-        "analyze": "Turn recorded traffic into endpoint templates and detect how the site authenticates.",
         "generate": "Use Claude to turn endpoints into named, described tools (reads and actions).",
         "serve": "Run an MCP server that exposes a site's tools to your agent.",
         "call": "Call one of a site's tools from the terminal.",

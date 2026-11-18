@@ -234,6 +234,16 @@ def generate(site: str, model: str | None = "sonnet", log=print) -> dict:
             t.unverified = True
         seen.add(t.name)
         tools.append(t.model_dump())
+    # Reads: a path id the site only ever used with ONE value is "mine" (my user/term/org id): default it.
+    by_url = {e["url"]: e for e in data["endpoints"]}
+    for t in tools:
+        ep = by_url.get(t["url"])
+        if not ep or t["kind"] != "read":
+            continue
+        for p in t.get("params", []):
+            vals = ep["path_params"].get(p["key"]) if p["location"] == "path" else ep["query"].get(p["key"])
+            if p.get("default") is None and vals and len(vals) == 1:
+                p["default"], p["required"] = vals[0], False
     # Keep instant tools for anything Claude didn't cover, so polishing never loses coverage.
     instant = store.read_json(d / "tools.instant.json", {}) or {}
     covered = {(t["method"], re.sub(r"\{[^}]+\}", "{}", t["url"])) for t in tools}

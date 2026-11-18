@@ -127,6 +127,55 @@ def cmd_check(args) -> int:
     return 0
 
 
+def cmd_mcp(args) -> int:
+    from underpass.hub import run
+
+    run()
+    return 0
+
+
+def cmd_setup(args) -> int:
+    """Install the Underpass hub MCP server into coding agents."""
+    import os
+    from pathlib import Path
+
+    cmd = [sys.executable, "-m", "underpass", "mcp"]
+    agents = ["claude", "codex", "cursor"] if args.agent == "all" else [args.agent]
+    for agent in agents:
+        if agent == "claude":
+            exe = shutil.which("claude")
+            if exe:
+                subprocess.run([exe, "mcp", "remove", "underpass", "--scope", "user"], capture_output=True)
+                ok = subprocess.run([exe, "mcp", "add", "underpass", "--scope", "user", "--", *cmd], capture_output=True).returncode == 0
+                print(f"Claude Code: {'added' if ok else 'failed'}")
+            else:
+                print("Claude Code: not installed, skipped")
+        elif agent == "codex":
+            exe = shutil.which("codex")
+            if exe and subprocess.run([exe, "mcp", "add", "underpass", "--", *cmd], capture_output=True).returncode == 0:
+                print("Codex: added")
+            else:
+                cfg = Path.home() / ".codex" / "config.toml"
+                block = f"\n[mcp_servers.underpass]\ncommand = {json.dumps(cmd[0])}\nargs = {json.dumps(cmd[1:])}\n"
+                if cfg.parent.exists() and "[mcp_servers.underpass]" not in (cfg.read_text(encoding="utf-8") if cfg.exists() else ""):
+                    with cfg.open("a", encoding="utf-8") as f:
+                        f.write(block)
+                    print(f"Codex: added to {cfg}")
+                else:
+                    print("Codex: add this to ~/.codex/config.toml:" + block)
+        elif agent == "cursor":
+            cfg = Path.home() / ".cursor" / "mcp.json"
+            data = store.read_json(cfg, {}) or {}
+            data.setdefault("mcpServers", {})["underpass"] = {"command": cmd[0], "args": cmd[1:]}
+            cfg.parent.mkdir(exist_ok=True)
+            store.write_json(cfg, data)
+            print(f"Cursor: added to {cfg}")
+    print("\nAny other MCP agent: add this server config:")
+    print(json.dumps({"mcpServers": {"underpass": {"command": cmd[0], "args": cmd[1:]}}}, indent=2))
+    print('\nRestart your agent, then ask: "Use Underpass to connect <website> and ..."')
+    return 0
+
+
 def cmd_serve(args) -> int:
     from underpass.server import serve
 
@@ -157,7 +206,7 @@ def cmd_add(args) -> int:
 
     t0 = time.time()
     if not args.skip_record:
-        record(args.url, explore=not args.no_explore, max_pages=args.max_pages)
+        record(args.url, explore=not args.no_explore, max_pages=args.max_pages, headless_login=args.no_login)
     site = store.site_name(args.url)
     print("\nMapping everything the site can show and do...")
     report = analyze(site)
@@ -192,7 +241,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("url", help="Website, e.g. coach.mastersunion.org")
     p.add_argument("--skip-record", action="store_true", help="Reuse the existing recording.")
     p.add_argument("--no-explore", action="store_true", help="Skip automatic exploration.")
-    p.add_argument("--max-pages", type=int, default=25)
+    p.add_argument("--max-pages", type=int, default=40)
+    p.add_argument("--no-login", action="store_true", help="Public site: don't open a login window.")
     p.add_argument("--model", help="Claude model for tool design (default: your Claude Code default).")
     p.add_argument("--no-register", action="store_true", help="Don't register with Claude Code.")
     p.add_argument("--no-polish", action="store_true", help="Skip the Claude polishing step (instant tools only).")
@@ -234,6 +284,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("site")
     p.add_argument("--prune", action="store_true", help="Remove code-only tools that the live site rejects.")
     p.set_defaults(func=cmd_check)
+
+    p = sub.add_parser("mcp", help="Run the Underpass hub MCP server (any agent can add and use any website).")
+    p.set_defaults(func=cmd_mcp)
+
+    p = sub.add_parser("setup", help="Install Underpass into your coding agents (claude, codex, cursor, all).")
+    p.add_argument("agent", nargs="?", default="all", choices=["all", "claude", "codex", "cursor"])
+    p.set_defaults(func=cmd_setup)
 
     p = sub.add_parser("serve", help="Run the MCP server for a site (your agent starts this).")
     p.add_argument("site")

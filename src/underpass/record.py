@@ -23,7 +23,7 @@ NOISE_HOSTS = (
     "mixpanel", "sentry", "clarity.ms", "intercom", "amplitude", "posthog", "newrelic", "nr-data",
     "datadoghq", "fullstory", "hubspot", "cloudflareinsights", "recaptcha", "gstatic", "googleapis.com/identitytoolkit",
     "linkedin", "twitter", "tiktok", "bing.com", "yandex", "branch.io", "onesignal", "pusher", "moengage",
-    "clevertap", "webengage", "lr-ingest", "logrocket", "bugsnag", "launchdarkly", "statsig", "growthbook",
+    "clevertap", "webengage", "wootric", "ipify", "google.com/", "googlesyndication", "gvt1", "youtube", "lr-ingest", "logrocket", "bugsnag", "launchdarkly", "statsig", "growthbook",
 )
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 LOGINISH = re.compile(r"login|signin|sign-in|auth|session|token|otp|verify|callback|oauth|sso", re.I)

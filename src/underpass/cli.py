@@ -166,10 +166,19 @@ def cmd_add(args) -> int:
         f"({report['reads']} read, {report['actions']} actions), {report['found_in_code_only']} more found in the site's code"
     )
     print(f"  login: {', '.join(f'{h} ({s})' for h, s in report['auth'].items())}")
+    from underpass.instant import instant_tools
+
+    spec = instant_tools(site)
+    reads = sum(t["kind"] == "read" for t in spec["tools"])
+    if not args.no_register:
+        print(register(site))
+    print(f"\nREADY in {time.time() - t0:.0f}s: your agent can now use {len(spec['tools'])} tools "
+          f"({reads} read, {len(spec['tools']) - reads} actions) on {site}.")
+    if args.no_polish:
+        return 0
+    print("\nPolishing names and descriptions with Claude (the tools keep working meanwhile)...")
     spec = generate(site, model=args.model or "sonnet")
     _print_tools(spec)
-    if not args.no_register:
-        print("\n" + register(site))
     print(f"\nDone in {time.time() - t0:.0f}s.")
     return 0
 
@@ -186,6 +195,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-pages", type=int, default=25)
     p.add_argument("--model", help="Claude model for tool design (default: your Claude Code default).")
     p.add_argument("--no-register", action="store_true", help="Don't register with Claude Code.")
+    p.add_argument("--no-polish", action="store_true", help="Skip the Claude polishing step (instant tools only).")
     p.set_defaults(func=cmd_add)
 
     p = sub.add_parser("login", help="Log in to a site again (when the saved login expired).")

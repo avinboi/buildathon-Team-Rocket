@@ -234,6 +234,13 @@ def generate(site: str, model: str | None = "sonnet", log=print) -> dict:
             t.unverified = True
         seen.add(t.name)
         tools.append(t.model_dump())
+    # Keep instant tools for anything Claude didn't cover, so polishing never loses coverage.
+    instant = store.read_json(d / "tools.instant.json", {}) or {}
+    covered = {(t["method"], re.sub(r"\{[^}]+\}", "{}", t["url"])) for t in tools}
+    for t in instant.get("tools", []):
+        if (t["method"], re.sub(r"\{[^}]+\}", "{}", t["url"])) not in covered and t["name"] not in seen:
+            seen.add(t["name"])
+            tools.append(t)
     read_names = {t["name"] for t in tools if t["kind"] == "read"}
     def words(name):
         return {w.rstrip("s") for w in name.split("_")} - {"get", "list", "create", "update", "delete", "submit", "add", "my", ""}

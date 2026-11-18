@@ -31,3 +31,6 @@ sites/
 
 # Lockfiles (not counted as work, per RULES.md)
 uv.lock
+
+# Race results
+demo/results/

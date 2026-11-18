@@ -19,11 +19,10 @@ from urllib.parse import quote, urlencode, urlparse
 
 from underpass import store
 
-MAX_RESPONSE_CHARS = 16_000
+MAX_RESPONSE_CHARS = 40_000
 TAG = re.compile(r"<[^>]+>")
 STATUSY = re.compile(
-    r"status|state|submi|complet|done|exists|^is[A-Z_]|^has[A-Z_]|^can[A-Z_]|attend|present|absent|due|deadline"
-    r"|grade|score|marks|result|paid|pending|approved|read|seen|locked|active|enabled|count|total",
+    r"status|state$|submi|complet|done$|exists|attend|present|absent|due|deadline|grade|score|marks|result|paid|pending|approved",
     re.I,
 )
 
@@ -99,10 +98,27 @@ def clean(value):
     return value
 
 
+def _cap_strings(value, cap: int):
+    if isinstance(value, dict):
+        return {k: _cap_strings(v, cap) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_cap_strings(v, cap) for v in value]
+    if isinstance(value, str) and len(value) > cap and not value.startswith("http"):
+        return value[:cap] + "..."
+    return value
+
+
 def shrink(value, limit: int = MAX_RESPONSE_CHARS):
     """Halve the longest lists until the JSON fits, and say how much was cut."""
     text = json.dumps(value, ensure_ascii=False)
     note = None
+    # First shorten long text (descriptions, HTML bodies): keeps every item, loses only detail.
+    for cap in (200, 80):
+        if len(text) <= limit:
+            break
+        value = _cap_strings(value, cap)
+        text = json.dumps(value, ensure_ascii=False)
+        note = f"Long text fields were shortened to {cap} chars; call with all_fields=true or a detail tool for full text."
     while len(text) > limit:
         longest, parent_key = None, None
 

@@ -27,7 +27,7 @@ Open 2 terminals side by side (big font) + one Claude Code window.
 ```bash
 uv run underpass list coach.mastersunion.org
 ```
-> "I ran `underpass add coach.mastersunion.org`, logged in once and clicked around for 2 minutes. Underpass explored the rest
+> "I ran `underpass add coach.mastersunion.org`, logged in once. That is all I did. Underpass explored the rest
 > on its own, read the site's JavaScript, and Claude designed **239 tools: 171 reads and 68 actions**. I never clicked
 > those actions: Underpass found them in the site's own code."
 
